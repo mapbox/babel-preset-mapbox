@@ -1,7 +1,9 @@
+"use strict";
+
 const isPlainObj = require("is-plain-obj");
 const TARGET_BROWSER = "browser";
 
-module.exports = function preset(context, opts = {}) {
+module.exports = function preset(context, opts = []) {
   // see https://github.com/facebook/create-react-app/blob/590df7eead1a2526828aa36ceff41397e82bd4dd/packages/babel-preset-react-app/index.js#L52
   const env = process.env.BABEL_ENV || process.env.NODE_ENV;
   if (env !== "development" && env !== "test" && env !== "production") {
@@ -14,38 +16,120 @@ module.exports = function preset(context, opts = {}) {
     );
   }
 
-  opts = isPlainObj(opts) ? opts : {};
+  opts = Array.isArray(opts) ? opts : [];
 
-  var isEnvDevelopment = env === "development";
-  var isEnvProduction = env === "production";
-  var isEnvTest = env === "test";
-
-  const target = opts.target || TARGET_BROWSER;
-
-  const presets = [
-    [require.resolve("babel-preset-env"), opts.env],
-    require.resolve("babel-preset-react")
-  ];
-
-  const plugins = [
-    require.resolve("babel-plugin-syntax-dynamic-import"),
-    require.resolve("babel-plugin-transform-class-properties"),
-    require.resolve("babel-plugin-transform-object-rest-spread"),
-    [
-      require.resolve("@mapbox/babel-plugin-transform-jsxtreme-markdown"),
-      opts.jsxtremeMarkdownOptions
-    ]
-  ];
-
-  if (isEnvProduction) {
-    plugins.push("babel-plugin-transform-react-remove-prop-types");
-  } else {
-    plugins.push(require.resolve("babel-plugin-transform-react-jsx-source"));
-    plugins.push(require.resolve("babel-plugin-transform-react-jsx-self"));
+  // a shorthand if you want to override one property
+  if (opts.length === 2 && typeof opts[0] === "string") {
+    opts = [opts];
   }
 
+  const isEnvDevelopment = env === "development";
+  const isEnvProduction = env === "production";
+  const isEnvTest = env === "test";
+  let payload = [
+    { name: "babel-preset-react" },
+    {
+      // Necessary to include regardless of the environment because
+      // in practice some other transforms (such as object-rest-spread)
+      // don't work without it: https://github.com/babel/babel/issues/7215
+      name: "babel-plugin-transform-es2015-destructuring"
+    },
+    {
+      name: "babel-plugin-transform-class-properties"
+    },
+    {
+      // useBuiltIns for these plugins means they'll rely on Object.assign
+      // being available, instead of adding their own polyfill.
+      name: "babel-plugin-transform-object-rest-spread",
+      options: { useBuiltIns: true }
+    },
+    {
+      name: "babel-plugin-transform-react-jsx",
+      options: { useBuiltIns: true }
+    },
+    {
+      name: "babel-plugin-transform-runtime",
+      options: {
+        helpers: false,
+        polyfill: false,
+        regenerator: true
+      }
+    }
+  ];
+
+  if (isEnvTest) {
+    payload.push(
+      {
+        name: "babel-preset-env",
+        options: {
+          targets: {
+            node: "current"
+          }
+        }
+      },
+      // Compiles import() to a deferred require()
+      {
+        name: "babel-plugin-dynamic-import-node"
+      }
+    );
+  } else {
+    payload.push(
+      {
+        name: "babel-preset-env",
+        options: {
+          // Do not transform modules to CJS
+          modules: false
+        }
+      },
+      // Adds syntax support for import()
+      { name: "babel-plugin-syntax-dynamic-import" }
+    );
+  }
+
+  if (isEnvDevelopment || isEnvTest) {
+    payload.push(
+      { name: "babel-plugin-transform-react-jsx-source" },
+      { name: "babel-plugin-transform-react-jsx-self" }
+    );
+  }
+
+  if (isEnvProduction) {
+    payload.push({
+      name: "babel-plugin-transform-react-remove-prop-types"
+    });
+  }
+
+  payload = payload.map(item => {
+    const userOptions = findProperty(opts, item.name);
+    const options = Object.assign({}, item.options, userOptions);
+    if (Object.keys(options).length === 0) {
+      return item.name;
+    }
+    return [item.name, options];
+  });
+
   return {
-    plugins,
-    presets
+    plugins: filterOutPlugins(payload),
+    presets: filterOutPresets(payload)
   };
 };
+
+const findProperty = (data, name) => {
+  // babel follows a convention of omitting babel-plugin- or babel-preset-
+  const found = data.find(
+    r => typeof r[0] === "string" && (r[0] === name || name.endsWith(r[0]))
+  );
+  return found && found[1];
+};
+
+const filterOutPlugins = payload =>
+  payload.filter(r => {
+    const name = Array.isArray(r) ? r[0] : r;
+    return name.startsWith("babel-plugin-");
+  });
+
+const filterOutPresets = payload =>
+  payload.filter(r => {
+    const name = Array.isArray(r) ? r[0] : r;
+    return name.startsWith("babel-preset-");
+  });

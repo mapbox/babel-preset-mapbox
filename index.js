@@ -1,12 +1,14 @@
 "use strict";
 
-const isPlainObj = require("is-plain-obj");
-const TARGET_BROWSER = "browser";
-
 module.exports = function preset(context, opts = []) {
   // see https://github.com/facebook/create-react-app/blob/590df7eead1a2526828aa36ceff41397e82bd4dd/packages/babel-preset-react-app/index.js#L52
   const env = process.env.BABEL_ENV || process.env.NODE_ENV;
-  if (env !== "development" && env !== "test" && env !== "production") {
+  if (
+    env !== undefined &&
+    env !== "development" &&
+    env !== "test" &&
+    env !== "production"
+  ) {
     throw new Error(
       "Using `@mapbox/babel-preset-mapbox` requires that you specify `NODE_ENV` or " +
         '`BABEL_ENV` environment variables. Valid values are "development", ' +
@@ -16,14 +18,18 @@ module.exports = function preset(context, opts = []) {
     );
   }
 
-  opts = Array.isArray(opts) ? opts : [];
+  if (!Array.isArray(opts)) {
+    throw new Error(
+      "`@mapbox/babel-preset-mapbox` expects an array as an option."
+    );
+  }
 
   // a shorthand if you want to override one property
   if (opts.length === 2 && typeof opts[0] === "string") {
     opts = [opts];
   }
 
-  const isEnvDevelopment = env === "development";
+  const isEnvDevelopment = env === "development" || env === undefined;
   const isEnvProduction = env === "production";
   const isEnvTest = env === "test";
   let payload = [

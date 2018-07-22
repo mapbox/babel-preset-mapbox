@@ -121,10 +121,7 @@ module.exports = function preset(context, opts = []) {
 };
 
 const findProperty = (data, name) => {
-  // babel follows a convention of omitting babel-plugin- or babel-preset-
-  const found = data.find(
-    r => typeof r[0] === "string" && (r[0] === name || name.endsWith(r[0]))
-  );
+  const found = data.find(r => typeof r[0] === "string" && r[0] === name);
   return found && found[1];
 };
 
